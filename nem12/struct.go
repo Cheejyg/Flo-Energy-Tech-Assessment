@@ -1,6 +1,10 @@
 package nem12
 
-import "time"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
 
 // # Header record (100)
 //
@@ -23,6 +27,26 @@ type HeaderRecord struct {
 	DateTime        time.Time // File creation date/time.
 	FromParticipant [10]byte  // The Participant ID of the MDP that generates the file.
 	ToParticipant   [10]byte  // The Participant ID of the intended Registered Participant, MDP or ENM.
+}
+
+func (headerRecord *HeaderRecord) String() string {
+	var stringBuilder strings.Builder
+	stringBuilder.Grow(256)
+
+	stringBuilder.WriteString("HeaderRecord{")
+	stringBuilder.WriteString("RecordIndicator:")
+	stringBuilder.Write(headerRecord.RecordIndicator[:])
+	stringBuilder.WriteString(", VersionHeader:")
+	stringBuilder.Write(headerRecord.VersionHeader[:])
+	stringBuilder.WriteString(", DateTime:")
+	stringBuilder.WriteString(headerRecord.DateTime.Format("15:04 on 2 January 2006"))
+	stringBuilder.WriteString(", FromParticipant:")
+	stringBuilder.Write(headerRecord.FromParticipant[:])
+	stringBuilder.WriteString(", ToParticipant:")
+	stringBuilder.Write(headerRecord.ToParticipant[:])
+	stringBuilder.WriteString("}")
+
+	return stringBuilder.String()
 }
 
 // # NMI data details record (200)
@@ -98,6 +122,52 @@ type NmiDataDetailsRecord struct {
 	NextScheduledReadDate *time.Time
 }
 
+func (nmiDataDetailsRecord *NmiDataDetailsRecord) String() string {
+	var stringBuilder strings.Builder
+	stringBuilder.Grow(256)
+
+	stringBuilder.WriteString("NmiDataDetailsRecord{")
+	stringBuilder.WriteString("RecordIndicator:")
+	stringBuilder.Write(nmiDataDetailsRecord.RecordIndicator[:])
+	stringBuilder.WriteString(", Nmi:")
+	stringBuilder.Write(nmiDataDetailsRecord.Nmi[:])
+	stringBuilder.WriteString(", NmiConfiguration:")
+	stringBuilder.WriteString(nmiDataDetailsRecord.NmiConfiguration)
+	if nmiDataDetailsRecord.RegisterId != nil {
+		stringBuilder.WriteString(", RegisterId:")
+		stringBuilder.Write(nmiDataDetailsRecord.RegisterId[:])
+	} else {
+		stringBuilder.WriteString(", RegisterId:<nil>")
+	}
+	stringBuilder.WriteString(", NmiSuffix:")
+	stringBuilder.Write(nmiDataDetailsRecord.NmiSuffix[:])
+	if nmiDataDetailsRecord.MdmDataStreamIdentifier != nil {
+		stringBuilder.WriteString(", MdmDataStreamIdentifier:")
+		stringBuilder.Write(nmiDataDetailsRecord.MdmDataStreamIdentifier[:])
+	} else {
+		stringBuilder.WriteString(", MdmDataStreamIdentifier:<nil>")
+	}
+	if nmiDataDetailsRecord.MeterSerialNumber != nil {
+		stringBuilder.WriteString(", MeterSerialNumber:")
+		stringBuilder.Write(nmiDataDetailsRecord.MeterSerialNumber[:])
+	} else {
+		stringBuilder.WriteString(", MeterSerialNumber:<nil>")
+	}
+	stringBuilder.WriteString(", Uom:")
+	stringBuilder.Write(nmiDataDetailsRecord.Uom[:])
+	stringBuilder.WriteString(", IntervalLength:")
+	stringBuilder.Write(nmiDataDetailsRecord.IntervalLength[:])
+	if nmiDataDetailsRecord.NextScheduledReadDate != nil {
+		stringBuilder.WriteString(", NextScheduledReadDate:")
+		stringBuilder.WriteString(nmiDataDetailsRecord.NextScheduledReadDate.Format("2 January 2006"))
+	} else {
+		stringBuilder.WriteString(", NextScheduledReadDate:<nil>")
+	}
+	stringBuilder.WriteString("}")
+
+	return stringBuilder.String()
+}
+
 // # Interval data record (300)
 //
 // Example: RecordIndicator,IntervalDate,IntervalValue1 . . . IntervalValueN, QualityMethod,ReasonCode,ReasonDescription,UpdateDateTime,MSATSLoadDateTime
@@ -163,6 +233,54 @@ type IntervalDataRecord struct {
 
 	UpdateDateTime    *time.Time // The latest date/time that any updated IntervalValue or QualityMethod for the IntervalDate. This is the MDP’s version date/time that the metering data was created or changed. This date and time applies to data in this 300 record.
 	MsatsLoadDateTime *time.Time // This is the date/time stamp MSATS records when metering data was loaded into MSATS. This date is in the acknowledgement notification sent to the MDP by MSATS.
+}
+
+func (intervalDataRecord *IntervalDataRecord) String() string {
+	var stringBuilder strings.Builder
+	stringBuilder.Grow(1024)
+
+	stringBuilder.WriteString("IntervalDataRecord{")
+	stringBuilder.WriteString("RecordIndicator:")
+	stringBuilder.Write(intervalDataRecord.RecordIndicator[:])
+	stringBuilder.WriteString(", IntervalDate:")
+	stringBuilder.WriteString(intervalDataRecord.IntervalDate.Format("2 January 2006"))
+	stringBuilder.WriteString(", IntervalValue:[")
+	for i := range intervalDataRecord.IntervalValue {
+		if i > 0 {
+			stringBuilder.WriteString(", ")
+		}
+		stringBuilder.WriteString(strconv.FormatFloat(intervalDataRecord.IntervalValue[i], 'f', -1, 64))
+	}
+	stringBuilder.WriteString("]")
+	stringBuilder.WriteString(", QualityMethod:")
+	stringBuilder.Write(intervalDataRecord.QualityMethod[:])
+	if intervalDataRecord.ReasonCode != nil {
+		stringBuilder.WriteString(", ReasonCode:")
+		stringBuilder.Write(intervalDataRecord.ReasonCode[:])
+	} else {
+		stringBuilder.WriteString(", ReasonCode:<nil>")
+	}
+	if intervalDataRecord.ReasonDescription != nil {
+		stringBuilder.WriteString(", ReasonDescription:")
+		stringBuilder.WriteString(*intervalDataRecord.ReasonDescription)
+	} else {
+		stringBuilder.WriteString(", ReasonDescription:<nil>")
+	}
+	if intervalDataRecord.UpdateDateTime != nil {
+		stringBuilder.WriteString(", UpdateDateTime:")
+		stringBuilder.WriteString(intervalDataRecord.UpdateDateTime.Format("15:04 on 2 January 2006"))
+	} else {
+		stringBuilder.WriteString(", UpdateDateTime:<nil>")
+	}
+	if intervalDataRecord.MsatsLoadDateTime != nil {
+		stringBuilder.WriteString(", MsatsLoadDateTime:")
+		stringBuilder.WriteString(intervalDataRecord.MsatsLoadDateTime.Format("15:04 on 2 January 2006"))
+	} else {
+		stringBuilder.WriteString(", MsatsLoadDateTime:<nil>")
+	}
+	stringBuilder.WriteString("}")
+
+	return stringBuilder.String()
 }
 
 // # Interval event record (400)
@@ -247,7 +365,7 @@ type B2bDetailsRecord struct {
 	// Refer Appendix A for a list of allowed values for this field.
 	//
 	// A value of ‘O’ (i.e. capital letter O) must be used when providing Historical Data and where this information is unavailable.
-	TransCode byte
+	TransCode [1]byte
 
 	RetServiceOrder *[15]byte // The Service Order number associated with the Meter Reading.
 
@@ -266,6 +384,38 @@ type B2bDetailsRecord struct {
 	IndexRead *[15]byte
 }
 
+func (b2bDetailsRecord *B2bDetailsRecord) String() string {
+	var stringBuilder strings.Builder
+	stringBuilder.Grow(256)
+
+	stringBuilder.WriteString("B2bDetailsRecord{")
+	stringBuilder.WriteString("RecordIndicator:")
+	stringBuilder.Write(b2bDetailsRecord.RecordIndicator[:])
+	stringBuilder.WriteString(", TransCode:")
+	stringBuilder.Write(b2bDetailsRecord.TransCode[:])
+	if b2bDetailsRecord.RetServiceOrder != nil {
+		stringBuilder.WriteString(", RetServiceOrder:")
+		stringBuilder.Write(b2bDetailsRecord.RetServiceOrder[:])
+	} else {
+		stringBuilder.WriteString(", RetServiceOrder:<nil>")
+	}
+	if b2bDetailsRecord.ReadDateTime != nil {
+		stringBuilder.WriteString(", ReadDateTime:")
+		stringBuilder.WriteString(b2bDetailsRecord.ReadDateTime.Format("2 January 2006"))
+	} else {
+		stringBuilder.WriteString(", ReadDateTime:<nil>")
+	}
+	if b2bDetailsRecord.IndexRead != nil {
+		stringBuilder.WriteString(", IndexRead:")
+		stringBuilder.Write(b2bDetailsRecord.IndexRead[:])
+	} else {
+		stringBuilder.WriteString(", IndexRead:<nil>")
+	}
+	stringBuilder.WriteString("}")
+
+	return stringBuilder.String()
+}
+
 // # End of data (900)
 //
 // Example: RecordIndicator
@@ -276,4 +426,16 @@ type EndOfData struct {
 	//
 	// Allowed Value: 900.
 	RecordIndicator [3]byte
+}
+
+func (endOfData *EndOfData) String() string {
+	var stringBuilder strings.Builder
+	stringBuilder.Grow(30)
+
+	stringBuilder.WriteString("EndOfData{")
+	stringBuilder.WriteString("RecordIndicator:")
+	stringBuilder.Write(endOfData.RecordIndicator[:])
+	stringBuilder.WriteString("}")
+
+	return stringBuilder.String()
 }
