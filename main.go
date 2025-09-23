@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +38,18 @@ var intervalDataJobChan chan IntervalDataJob = make(chan IntervalDataJob, 4096)
 var intervalDataJobWaitGroup sync.WaitGroup
 
 func generateInsertStatement(meterReadingsJob MeterReadingsJob) string {
-	return fmt.Sprintf("INSERT INTO meter_readings (nmi, timestamp, consumption) VALUES ('%s', '%s', %s);", meterReadingsJob.Nmi, meterReadingsJob.Timestamp.Format(sqlTimestampLayout), strconv.FormatFloat(meterReadingsJob.Consumption, 'f', -1, 64))
+	var stringBuilder strings.Builder
+	stringBuilder.Grow(128)
+
+	stringBuilder.WriteString("INSERT INTO meter_readings (nmi, timestamp, consumption) VALUES ('")
+	stringBuilder.WriteString(meterReadingsJob.Nmi)
+	stringBuilder.WriteString("','")
+	stringBuilder.WriteString(meterReadingsJob.Timestamp.Format(sqlTimestampLayout))
+	stringBuilder.WriteString("',")
+	stringBuilder.WriteString(strconv.FormatFloat(meterReadingsJob.Consumption, 'f', -1, 64))
+	stringBuilder.WriteString(");")
+
+	return stringBuilder.String()
 }
 
 func processLine(line []byte, nmi *string, intervalLength *int) {
