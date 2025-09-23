@@ -106,8 +106,7 @@ func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJ
 	for i := range meterReadingsJob {
 		writer.WriteString(meterReadingsJob[i].Nmi)
 		writer.WriteByte(',')
-		// writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
-		writer.WriteString(strconv.FormatInt(meterReadingsJob[i].Timestamp.Unix(), 10))
+		writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
 		writer.WriteByte(',')
 		writer.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
 
