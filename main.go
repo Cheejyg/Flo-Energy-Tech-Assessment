@@ -18,6 +18,7 @@ import (
 
 const sqlInsertBatchSize int = 16_384
 const sqlTimestampLayout string = "2006-01-02 15:04:05" // YYYY-MM-DD HH:MM:SS
+const intervalDataJobWorkers int = 8
 
 var sep []byte = []byte{','}
 
@@ -36,7 +37,6 @@ type IntervalDataJob struct {
 var meterReadingsJobChan chan MeterReadingsJob = make(chan MeterReadingsJob, 2048)
 var meterReadingsJobWaitGroup sync.WaitGroup
 
-var intervalDataJobWorkers int = 8
 var intervalDataJobChan chan IntervalDataJob = make(chan IntervalDataJob, 4096)
 var intervalDataJobWaitGroup sync.WaitGroup
 
@@ -109,7 +109,6 @@ func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJ
 		writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
 		writer.WriteByte(',')
 		writer.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
-
 		if i < len(meterReadingsJob)-1 {
 			writer.WriteByte('\n')
 		}
