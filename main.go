@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -116,6 +117,7 @@ func processLine(line []byte, nmi *string, intervalLength *int) {
 	case bytes.Equal(record[0], nem12.RecordIndicatorNmiDataDetailsBytes):
 		nmiDataDetailsRecord, err := nem12.ParseNmiDataDetailsRecord(record)
 		if err != nil {
+			log.Fatalln(err)
 			return
 		}
 
@@ -123,12 +125,14 @@ func processLine(line []byte, nmi *string, intervalLength *int) {
 
 		i, err := strconv.Atoi(nem12.ParseByteString(nmiDataDetailsRecord.IntervalLength[:]))
 		if err != nil {
+			log.Fatalln(err)
 			return
 		}
 		*intervalLength = i
 	case bytes.Equal(record[0], nem12.RecordIndicatorIntervalDataBytes):
 		intervalDataRecord, err := nem12.ParseIntervalDataRecord(record, *intervalLength)
 		if err != nil {
+			log.Fatalln(err)
 			return
 		}
 
@@ -153,6 +157,7 @@ func main() {
 	name := "NEM12#200506081149#UNITEDDP#NEMMCO.csv"
 	nem12File, err := os.Open(name)
 	if err != nil {
+		log.Fatalln(err)
 		return
 	}
 	defer nem12File.Close()
@@ -162,12 +167,14 @@ func main() {
 
 	sqlInsertFile, err := os.Create(sqlInsertFileName)
 	if err != nil {
+		log.Fatalln(err)
 		return
 	}
 	defer sqlInsertFile.Close()
 
 	sqlCopyFile, err := os.Create(sqlCopyFileName)
 	if err != nil {
+		log.Fatalln(err)
 		return
 	}
 	defer sqlCopyFile.Close()
@@ -233,6 +240,7 @@ loop:
 
 					break loop
 				} else {
+					log.Fatalln(err)
 					return
 				}
 			}
