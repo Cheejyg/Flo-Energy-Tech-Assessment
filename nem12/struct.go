@@ -37,15 +37,15 @@ func (headerRecord *HeaderRecord) String() string {
 
 	stringBuilder.WriteString("HeaderRecord{")
 	stringBuilder.WriteString("RecordIndicator:")
-	stringBuilder.Write(headerRecord.RecordIndicator[:])
+	stringBuilder.WriteString(ParseByteString(headerRecord.RecordIndicator[:]))
 	stringBuilder.WriteString(", VersionHeader:")
-	stringBuilder.Write(headerRecord.VersionHeader[:])
+	stringBuilder.WriteString(ParseByteString(headerRecord.VersionHeader[:]))
 	stringBuilder.WriteString(", DateTime:")
 	stringBuilder.WriteString(headerRecord.DateTime.Format("15:04 on 2 January 2006"))
 	stringBuilder.WriteString(", FromParticipant:")
-	stringBuilder.Write(headerRecord.FromParticipant[:])
+	stringBuilder.WriteString(ParseByteString(headerRecord.FromParticipant[:]))
 	stringBuilder.WriteString(", ToParticipant:")
-	stringBuilder.Write(headerRecord.ToParticipant[:])
+	stringBuilder.WriteString(ParseByteString(headerRecord.ToParticipant[:]))
 	stringBuilder.WriteString("}")
 
 	return stringBuilder.String()
@@ -130,35 +130,35 @@ func (nmiDataDetailsRecord *NmiDataDetailsRecord) String() string {
 
 	stringBuilder.WriteString("NmiDataDetailsRecord{")
 	stringBuilder.WriteString("RecordIndicator:")
-	stringBuilder.Write(nmiDataDetailsRecord.RecordIndicator[:])
+	stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.RecordIndicator[:]))
 	stringBuilder.WriteString(", Nmi:")
-	stringBuilder.Write(nmiDataDetailsRecord.Nmi[:])
+	stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.Nmi[:]))
 	stringBuilder.WriteString(", NmiConfiguration:")
 	stringBuilder.WriteString(nmiDataDetailsRecord.NmiConfiguration)
 	if nmiDataDetailsRecord.RegisterId != nil {
 		stringBuilder.WriteString(", RegisterId:")
-		stringBuilder.Write(nmiDataDetailsRecord.RegisterId[:])
+		stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.RegisterId[:]))
 	} else {
 		stringBuilder.WriteString(", RegisterId:<nil>")
 	}
 	stringBuilder.WriteString(", NmiSuffix:")
-	stringBuilder.Write(nmiDataDetailsRecord.NmiSuffix[:])
+	stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.NmiSuffix[:]))
 	if nmiDataDetailsRecord.MdmDataStreamIdentifier != nil {
 		stringBuilder.WriteString(", MdmDataStreamIdentifier:")
-		stringBuilder.Write(nmiDataDetailsRecord.MdmDataStreamIdentifier[:])
+		stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.MdmDataStreamIdentifier[:]))
 	} else {
 		stringBuilder.WriteString(", MdmDataStreamIdentifier:<nil>")
 	}
 	if nmiDataDetailsRecord.MeterSerialNumber != nil {
 		stringBuilder.WriteString(", MeterSerialNumber:")
-		stringBuilder.Write(nmiDataDetailsRecord.MeterSerialNumber[:])
+		stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.MeterSerialNumber[:]))
 	} else {
 		stringBuilder.WriteString(", MeterSerialNumber:<nil>")
 	}
 	stringBuilder.WriteString(", Uom:")
-	stringBuilder.Write(nmiDataDetailsRecord.Uom[:])
+	stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.Uom[:]))
 	stringBuilder.WriteString(", IntervalLength:")
-	stringBuilder.Write(nmiDataDetailsRecord.IntervalLength[:])
+	stringBuilder.WriteString(ParseByteString(nmiDataDetailsRecord.IntervalLength[:]))
 	if nmiDataDetailsRecord.NextScheduledReadDate != nil {
 		stringBuilder.WriteString(", NextScheduledReadDate:")
 		stringBuilder.WriteString(nmiDataDetailsRecord.NextScheduledReadDate.Format("2 January 2006"))
@@ -243,7 +243,7 @@ func (intervalDataRecord *IntervalDataRecord) String() string {
 
 	stringBuilder.WriteString("IntervalDataRecord{")
 	stringBuilder.WriteString("RecordIndicator:")
-	stringBuilder.Write(intervalDataRecord.RecordIndicator[:])
+	stringBuilder.WriteString(ParseByteString(intervalDataRecord.RecordIndicator[:]))
 	stringBuilder.WriteString(", IntervalDate:")
 	stringBuilder.WriteString(intervalDataRecord.IntervalDate.Format("2 January 2006"))
 	stringBuilder.WriteString(", IntervalValue:[")
@@ -255,10 +255,10 @@ func (intervalDataRecord *IntervalDataRecord) String() string {
 	}
 	stringBuilder.WriteString("]")
 	stringBuilder.WriteString(", QualityMethod:")
-	stringBuilder.Write(intervalDataRecord.QualityMethod[:])
+	stringBuilder.WriteString(ParseByteString(intervalDataRecord.QualityMethod[:]))
 	if intervalDataRecord.ReasonCode != nil {
 		stringBuilder.WriteString(", ReasonCode:")
-		stringBuilder.Write(intervalDataRecord.ReasonCode[:])
+		stringBuilder.WriteString(ParseByteString(intervalDataRecord.ReasonCode[:]))
 	} else {
 		stringBuilder.WriteString(", ReasonCode:<nil>")
 	}
@@ -392,12 +392,12 @@ func (b2bDetailsRecord *B2bDetailsRecord) String() string {
 
 	stringBuilder.WriteString("B2bDetailsRecord{")
 	stringBuilder.WriteString("RecordIndicator:")
-	stringBuilder.Write(b2bDetailsRecord.RecordIndicator[:])
+	stringBuilder.WriteString(ParseByteString(b2bDetailsRecord.RecordIndicator[:]))
 	stringBuilder.WriteString(", TransCode:")
-	stringBuilder.Write(b2bDetailsRecord.TransCode[:])
+	stringBuilder.WriteString(ParseByteString(b2bDetailsRecord.TransCode[:]))
 	if b2bDetailsRecord.RetServiceOrder != nil {
 		stringBuilder.WriteString(", RetServiceOrder:")
-		stringBuilder.Write(b2bDetailsRecord.RetServiceOrder[:])
+		stringBuilder.WriteString(ParseByteString(b2bDetailsRecord.RetServiceOrder[:]))
 	} else {
 		stringBuilder.WriteString(", RetServiceOrder:<nil>")
 	}
@@ -409,7 +409,7 @@ func (b2bDetailsRecord *B2bDetailsRecord) String() string {
 	}
 	if b2bDetailsRecord.IndexRead != nil {
 		stringBuilder.WriteString(", IndexRead:")
-		stringBuilder.Write(b2bDetailsRecord.IndexRead[:])
+		stringBuilder.WriteString(ParseByteString(b2bDetailsRecord.IndexRead[:]))
 	} else {
 		stringBuilder.WriteString(", IndexRead:<nil>")
 	}
@@ -436,7 +436,7 @@ func (endOfData *EndOfData) String() string {
 
 	stringBuilder.WriteString("EndOfData{")
 	stringBuilder.WriteString("RecordIndicator:")
-	stringBuilder.Write(endOfData.RecordIndicator[:])
+	stringBuilder.WriteString(ParseByteString(endOfData.RecordIndicator[:]))
 	stringBuilder.WriteString("}")
 
 	return stringBuilder.String()
