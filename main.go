@@ -7,22 +7,29 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/Cheejyg/Flo-Energy-Tech-Assessment/nem12"
 )
 
 var sep []byte = []byte{','}
 
+type IntervalDataJob struct {
+	Nmi            string
+	IntervalDate   time.Time
+	IntervalLength time.Duration
+	IntervalValue  []float64
+}
+
+var intervalDataJobWorkers int = 8
+var intervalDataJobChan chan IntervalDataJob = make(chan IntervalDataJob, 4096)
+
 func processLine(line []byte, nmi *string, intervalLength *int) {
 	record := bytes.Split(line, sep)
 	switch {
 	case bytes.Equal(record[0], nem12.RecordIndicatorHeaderBytes):
-		headerRecord, err := nem12.ParseHeaderRecord(record)
-		if err != nil {
-			return
-		}
-
-		fmt.Println(headerRecord)
+		break
 	case bytes.Equal(record[0], nem12.RecordIndicatorNmiDataDetailsBytes):
 		nmiDataDetailsRecord, err := nem12.ParseNmiDataDetailsRecord(record)
 		if err != nil {
@@ -36,36 +43,26 @@ func processLine(line []byte, nmi *string, intervalLength *int) {
 			return
 		}
 		*intervalLength = i
-
-		fmt.Println(nmiDataDetailsRecord)
 	case bytes.Equal(record[0], nem12.RecordIndicatorIntervalDataBytes):
 		intervalDataRecord, err := nem12.ParseIntervalDataRecord(record, *intervalLength)
 		if err != nil {
 			return
 		}
 
-		fmt.Println(intervalDataRecord)
+		intervalDataJobChan <- IntervalDataJob{
+			Nmi:            *nmi,
+			IntervalDate:   intervalDataRecord.IntervalDate,
+			IntervalLength: time.Duration(*intervalLength) * time.Minute,
+			IntervalValue:  intervalDataRecord.IntervalValue,
+		}
 	case bytes.Equal(record[0], nem12.RecordIndicatorIntervalEventBytes):
-		intervalEventRecord, err := nem12.ParseIntervalEventRecord(record)
-		if err != nil {
-			return
-		}
-
-		fmt.Println(intervalEventRecord)
+		break
 	case bytes.Equal(record[0], nem12.RecordIndicatorB2bDetailsBytes):
-		b2bDetailsRecord, err := nem12.ParseB2bDetailsRecord(record)
-		if err != nil {
-			return
-		}
-
-		fmt.Println(b2bDetailsRecord)
+		break
 	case bytes.Equal(record[0], nem12.RecordIndicatorEndOfDataBytes):
-		endOfData, err := nem12.ParseEndOfData(record)
-		if err != nil {
-			return
-		}
-
-		fmt.Println(endOfData)
+		return
+	default:
+		break
 	}
 }
 
@@ -76,6 +73,17 @@ func main() {
 		return
 	}
 	defer nem12File.Close()
+
+	var intervalDataJobWaitGroup sync.WaitGroup
+	intervalDataJobWaitGroup.Add(intervalDataJobWorkers)
+	for range intervalDataJobWorkers {
+		go func() {
+			defer intervalDataJobWaitGroup.Done()
+			for intervalDataJob := range intervalDataJobChan {
+				fmt.Println(intervalDataJob)
+			}
+		}()
+	}
 
 	bufferedReader := bufio.NewReader(nem12File)
 	var bufferedLine []byte
@@ -107,4 +115,7 @@ loop:
 			}
 		}
 	}
+
+	close(intervalDataJobChan)
+	intervalDataJobWaitGroup.Wait()
 }
