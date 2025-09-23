@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrInvalidDate                 = errors.New("invalid date")
 	ErrInvalidDateTime             = errors.New("invalid datetime")
+	ErrInvalidIntervalValue        = errors.New("invalid interval value")
 	ErrInvalidHeaderRecord         = errors.New("invalid header record")
 	ErrInvalidNmiDataDetailsRecord = errors.New("invalid nmi data details record")
 	ErrInvalidIntervalDataRecord   = errors.New("invalid interval data record")

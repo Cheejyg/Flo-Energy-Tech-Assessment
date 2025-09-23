@@ -1,9 +1,34 @@
 package nem12
 
 import (
-	"strconv"
+	"math"
 	"time"
 )
+
+var optimize = true
+
+type floatInfo struct {
+	mantbits uint
+	expbits  uint
+	bias     int
+}
+
+var float64info = floatInfo{52, 11, -1023}
+var float64pow10 = []float64{
+	1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
+	1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
+	1e20, 1e21, 1e22,
+}
+
+func ParseByteString(bytes []byte) string {
+	for i, b := range bytes {
+		if b == 0x00 {
+			return string(bytes[:i])
+		}
+	}
+
+	return string(bytes)
+}
 
 func ParseDate8(date string) (time.Time, error) {
 	layout := "20060102" // CCYYMMDD
@@ -18,12 +43,115 @@ func ParseDateTime14(datetime string) (time.Time, error) {
 	return time.Parse(layout, datetime)
 }
 
-func ParseHeaderRecord(record []string) (headerRecord *HeaderRecord, err error) {
+func readFloat(b []byte) (mantissa uint64, exp int, trunc bool, i int, ok bool) {
+	if i >= len(b) {
+		return
+	}
+	if b[i] == '+' {
+		i++
+	}
+
+	base := uint64(10)
+	maxMantDigits := 19 // 10^19 fits in uint64
+	sawdot := false
+	sawdigits := false
+	nd := 0
+	ndMant := 0
+	dp := 0
+loop:
+	for ; i < len(b); i++ {
+		switch c := b[i]; true {
+		case c == '.':
+			if sawdot {
+				break loop
+			}
+			sawdot = true
+			dp = nd
+			continue
+
+		case '0' <= c && c <= '9':
+			sawdigits = true
+			if c == '0' && nd == 0 { // ignore leading zeros
+				dp--
+				continue
+			}
+			nd++
+			if ndMant < maxMantDigits {
+				mantissa *= base
+				mantissa += uint64(c - '0')
+				ndMant++
+			} else if c != '0' {
+				trunc = true
+			}
+			continue
+		}
+		break
+	}
+	if !sawdigits {
+		return
+	}
+	if !sawdot {
+		dp = nd
+	}
+
+	if mantissa != 0 {
+		exp = dp - ndMant
+	}
+
+	ok = true
+	return
+}
+func atof64exact(mantissa uint64, exp int) (f float64, ok bool) {
+	if mantissa>>float64info.mantbits != 0 {
+		return
+	}
+	f = float64(mantissa)
+	switch {
+	case exp == 0:
+		// an integer.
+		return f, true
+	// Exact integers are <= 10^15.
+	// Exact powers of ten are <= 10^22.
+	case exp > 0 && exp <= 15+22: // int * 10^k
+		// If exponent is big but number of digits is not, can move a few zeros into the integer part.
+		if exp > 22 {
+			f *= float64pow10[exp-22]
+			exp = 22
+		}
+		if f > 1e15 || f < -1e15 {
+			// the exponent was really too large.
+			return
+		}
+		return f * float64pow10[exp], true
+	case exp < 0 && exp >= -22: // int / 10^k
+		return f / float64pow10[-exp], true
+	}
+	return
+}
+func ParseIntervalValue(intervalValue []byte) (float64, error) {
+	mantissa, exp, trunc, _, ok := readFloat(intervalValue)
+	if !ok {
+		return 0, ErrInvalidIntervalValue
+	}
+
+	if optimize {
+		// Try pure floating-point arithmetic conversion.
+		if !trunc {
+			if f, ok := atof64exact(mantissa, exp); ok {
+				return f, nil
+			}
+		}
+	}
+
+	return float64(mantissa) * math.Pow10(exp), nil
+}
+
+func ParseHeaderRecord(record [][]byte) (headerRecord *HeaderRecord, err error) {
 	headerRecord = &HeaderRecord{}
 
 	copy(headerRecord.RecordIndicator[:], record[0])
 	copy(headerRecord.VersionHeader[:], record[1])
-	datetime, err := ParseDateTime12(record[2])
+	datetime, err := ParseDateTime12(string(record[2]))
 	if err != nil {
 		return nil, ErrInvalidDateTime
 	}
@@ -33,12 +161,12 @@ func ParseHeaderRecord(record []string) (headerRecord *HeaderRecord, err error) 
 
 	return
 }
-func ParseNmiDataDetailsRecord(record []string) (nmiDataDetailsRecord *NmiDataDetailsRecord, err error) {
+func ParseNmiDataDetailsRecord(record [][]byte) (nmiDataDetailsRecord *NmiDataDetailsRecord, err error) {
 	nmiDataDetailsRecord = &NmiDataDetailsRecord{}
 
 	copy(nmiDataDetailsRecord.RecordIndicator[:], record[0])
 	copy(nmiDataDetailsRecord.Nmi[:], record[1])
-	nmiDataDetailsRecord.NmiConfiguration = record[2]
+	nmiDataDetailsRecord.NmiConfiguration = string(record[2])
 	if len(record[3]) > 0 {
 		nmiDataDetailsRecord.RegisterId = &[10]byte{}
 		copy(nmiDataDetailsRecord.RegisterId[:], record[3])
@@ -55,7 +183,7 @@ func ParseNmiDataDetailsRecord(record []string) (nmiDataDetailsRecord *NmiDataDe
 	copy(nmiDataDetailsRecord.Uom[:], record[7])
 	copy(nmiDataDetailsRecord.IntervalLength[:], record[8])
 	if len(record) > 9 && len(record[9]) > 0 {
-		date, err := ParseDate8(record[9])
+		date, err := ParseDate8(string(record[9]))
 		if err != nil {
 			return nil, ErrInvalidDate
 		}
@@ -64,11 +192,11 @@ func ParseNmiDataDetailsRecord(record []string) (nmiDataDetailsRecord *NmiDataDe
 
 	return
 }
-func ParseIntervalDataRecord(record []string, intervalLength int) (intervalDataRecord *IntervalDataRecord, err error) {
+func ParseIntervalDataRecord(record [][]byte, intervalLength int) (intervalDataRecord *IntervalDataRecord, err error) {
 	intervalDataRecord = &IntervalDataRecord{}
 
 	copy(intervalDataRecord.RecordIndicator[:], record[0])
-	date, err := ParseDate8(record[1])
+	date, err := ParseDate8(string(record[1]))
 	if err != nil {
 		return nil, ErrInvalidDate
 	}
@@ -77,7 +205,7 @@ func ParseIntervalDataRecord(record []string, intervalLength int) (intervalDataR
 	n := 1440 / intervalLength
 	intervalDataRecord.IntervalValue = make([]float64, n)
 	for i := range n {
-		intervalValue, err := strconv.ParseFloat(record[2+i], 64)
+		intervalValue, err := ParseIntervalValue(record[2+i])
 		if err != nil {
 			return nil, err
 		}
@@ -90,17 +218,18 @@ func ParseIntervalDataRecord(record []string, intervalLength int) (intervalDataR
 		copy(intervalDataRecord.ReasonCode[:], record[n+3])
 	}
 	if len(record) > n+4 && len(record[n+4]) > 0 {
-		intervalDataRecord.ReasonDescription = &record[n+4]
+		reasonDescription := string(record[n+4])
+		intervalDataRecord.ReasonDescription = &reasonDescription
 	}
 	if len(record) > n+5 && len(record[n+5]) > 0 {
-		datetime, err := ParseDateTime14(record[n+5])
+		datetime, err := ParseDateTime14(string(record[n+5]))
 		if err != nil {
 			return nil, ErrInvalidDateTime
 		}
 		intervalDataRecord.UpdateDateTime = &datetime
 	}
 	if len(record) > n+6 && len(record[n+6]) > 0 {
-		datetime, err := ParseDateTime14(record[n+6])
+		datetime, err := ParseDateTime14(string(record[n+6]))
 		if err != nil {
 			return nil, ErrInvalidDateTime
 		}
@@ -109,7 +238,7 @@ func ParseIntervalDataRecord(record []string, intervalLength int) (intervalDataR
 
 	return
 }
-func ParseIntervalEventRecord(record []string) (intervalEventRecord *IntervalEventRecord, err error) {
+func ParseIntervalEventRecord(record [][]byte) (intervalEventRecord *IntervalEventRecord, err error) {
 	intervalEventRecord = &IntervalEventRecord{}
 
 	copy(intervalEventRecord.RecordIndicator[:], record[0])
@@ -121,12 +250,13 @@ func ParseIntervalEventRecord(record []string) (intervalEventRecord *IntervalEve
 		copy(intervalEventRecord.ReasonCode[:], record[4])
 	}
 	if len(record) > 5 && len(record[5]) > 0 {
-		intervalEventRecord.ReasonDescription = &record[5]
+		reasonDescription := string(record[5])
+		intervalEventRecord.ReasonDescription = &reasonDescription
 	}
 
 	return
 }
-func ParseB2bDetailsRecord(record []string) (b2bDetailsRecord *B2bDetailsRecord, err error) {
+func ParseB2bDetailsRecord(record [][]byte) (b2bDetailsRecord *B2bDetailsRecord, err error) {
 	b2bDetailsRecord = &B2bDetailsRecord{}
 
 	copy(b2bDetailsRecord.RecordIndicator[:], record[0])
@@ -136,7 +266,7 @@ func ParseB2bDetailsRecord(record []string) (b2bDetailsRecord *B2bDetailsRecord,
 		copy(b2bDetailsRecord.RetServiceOrder[:], record[2])
 	}
 	if len(record) > 3 && len(record[3]) > 0 {
-		datetime, err := ParseDateTime14(record[3])
+		datetime, err := ParseDateTime14(string(record[3]))
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +279,7 @@ func ParseB2bDetailsRecord(record []string) (b2bDetailsRecord *B2bDetailsRecord,
 
 	return
 }
-func ParseEndOfData(record []string) (endOfData *EndOfData, err error) {
+func ParseEndOfData(record [][]byte) (endOfData *EndOfData, err error) {
 	endOfData = &EndOfData{}
 
 	copy(endOfData.RecordIndicator[:], record[0])
