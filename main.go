@@ -114,6 +114,8 @@ func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJ
 			writer.WriteByte('\n')
 		}
 	}
+
+	writer.WriteString("\n")
 }
 
 func processLine(line []byte, nmi *string, intervalLength *int) {
