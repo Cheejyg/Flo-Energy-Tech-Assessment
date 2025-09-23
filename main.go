@@ -92,6 +92,21 @@ func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []MeterReading
 
 	writer.WriteString(");\n")
 }
+func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJob) {
+	defer writer.Flush()
+
+	for i := range meterReadingsJob {
+		writer.WriteString(meterReadingsJob[i].Nmi)
+		writer.WriteByte(',')
+		writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
+		writer.WriteByte(',')
+		writer.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
+
+		if i < len(meterReadingsJob)-1 {
+			writer.WriteByte('\n')
+		}
+	}
+}
 
 func processLine(line []byte, nmi *string, intervalLength *int) {
 	record := bytes.Split(line, sep)
@@ -143,14 +158,25 @@ func main() {
 	defer nem12File.Close()
 
 	sqlInsertFileName := strings.ReplaceAll(name, ".csv", "") + ".sql"
+	sqlCopyFileName := "meter_readings.sql.csv"
+
 	sqlInsertFile, err := os.Create(sqlInsertFileName)
 	if err != nil {
 		return
 	}
 	defer sqlInsertFile.Close()
 
+	sqlCopyFile, err := os.Create(sqlCopyFileName)
+	if err != nil {
+		return
+	}
+	defer sqlCopyFile.Close()
+
 	sqlInsertBufferedWriter := bufio.NewWriterSize(sqlInsertFile, 1<<20)
 	defer sqlInsertBufferedWriter.Flush()
+
+	sqlCopyBufferedWriter := bufio.NewWriterSize(sqlCopyFile, 1<<20)
+	defer sqlCopyBufferedWriter.Flush()
 
 	sqlInsertBatch := make([]MeterReadingsJob, 0, sqlInsertBatchSize)
 	go func() {
@@ -159,6 +185,7 @@ func main() {
 
 			if len(sqlInsertBatch) >= sqlInsertBatchSize {
 				writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
+				writeCopyStatements(sqlCopyBufferedWriter, sqlInsertBatch)
 				sqlInsertBatch = sqlInsertBatch[:0]
 			}
 
@@ -227,5 +254,6 @@ loop:
 
 	if len(sqlInsertBatch) > 0 {
 		writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
+		writeCopyStatements(sqlCopyBufferedWriter, sqlInsertBatch)
 	}
 }
