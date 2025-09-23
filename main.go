@@ -130,7 +130,7 @@ func main() {
 	}
 	defer sqlInsertFile.Close()
 
-	sqlInsertBufferedWriter := bufio.NewWriter(sqlInsertFile)
+	sqlInsertBufferedWriter := bufio.NewWriterSize(sqlInsertFile, 1<<20)
 	defer sqlInsertBufferedWriter.Flush()
 
 	sqlInsertBatch := make([]MeterReadingsJob, 0, sqlInsertBatchSize)
