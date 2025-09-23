@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -124,13 +123,25 @@ func main() {
 	}
 	defer nem12File.Close()
 
+	sqlInsertFileName := strings.ReplaceAll(name, ".csv", "") + ".sql"
+	sqlInsertFile, err := os.Create(sqlInsertFileName)
+	if err != nil {
+		return
+	}
+	defer sqlInsertFile.Close()
+
+	sqlInsertBufferedWriter := bufio.NewWriter(sqlInsertFile)
+	defer sqlInsertBufferedWriter.Flush()
+
 	sqlInsertBatch := make([]MeterReadingsJob, 0, sqlInsertBatchSize)
 	go func() {
 		for meterReadingsJob := range meterReadingsJobChan {
 			sqlInsertBatch = append(sqlInsertBatch, meterReadingsJob)
 
 			if len(sqlInsertBatch) >= sqlInsertBatchSize {
-				fmt.Println(generateInsertStatements(sqlInsertBatch))
+				sqlInsertBufferedWriter.WriteString(generateInsertStatements(sqlInsertBatch))
+				sqlInsertBufferedWriter.WriteByte('\n')
+				sqlInsertBufferedWriter.Flush()
 				sqlInsertBatch = sqlInsertBatch[:0]
 			}
 
@@ -198,6 +209,8 @@ loop:
 	meterReadingsJobWaitGroup.Wait()
 
 	if len(sqlInsertBatch) > 0 {
-		fmt.Println(generateInsertStatements(sqlInsertBatch))
+		sqlInsertBufferedWriter.WriteString(generateInsertStatements(sqlInsertBatch))
+		sqlInsertBufferedWriter.WriteByte('\n')
+		sqlInsertBufferedWriter.Flush()
 	}
 }
