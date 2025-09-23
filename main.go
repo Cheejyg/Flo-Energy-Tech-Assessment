@@ -73,6 +73,25 @@ func generateInsertStatements(meterReadingsJob []MeterReadingsJob) string {
 
 	return stringBuilder.String()
 }
+func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJob) {
+	defer writer.Flush()
+
+	writer.WriteString("INSERT INTO meter_readings (nmi, timestamp, consumption)\n  VALUES\n")
+
+	for i := range meterReadingsJob {
+		writer.WriteString("    ('")
+		writer.WriteString(meterReadingsJob[i].Nmi)
+		writer.WriteString("','")
+		writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
+		writer.WriteString("',")
+		writer.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
+		if i < len(meterReadingsJob)-1 {
+			writer.WriteString("),\n")
+		}
+	}
+
+	writer.WriteString(");\n")
+}
 
 func processLine(line []byte, nmi *string, intervalLength *int) {
 	record := bytes.Split(line, sep)
@@ -139,9 +158,7 @@ func main() {
 			sqlInsertBatch = append(sqlInsertBatch, meterReadingsJob)
 
 			if len(sqlInsertBatch) >= sqlInsertBatchSize {
-				sqlInsertBufferedWriter.WriteString(generateInsertStatements(sqlInsertBatch))
-				sqlInsertBufferedWriter.WriteByte('\n')
-				sqlInsertBufferedWriter.Flush()
+				writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
 				sqlInsertBatch = sqlInsertBatch[:0]
 			}
 
@@ -209,8 +226,6 @@ loop:
 	meterReadingsJobWaitGroup.Wait()
 
 	if len(sqlInsertBatch) > 0 {
-		sqlInsertBufferedWriter.WriteString(generateInsertStatements(sqlInsertBatch))
-		sqlInsertBufferedWriter.WriteByte('\n')
-		sqlInsertBufferedWriter.Flush()
+		writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
 	}
 }
