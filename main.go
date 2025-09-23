@@ -85,12 +85,12 @@ func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []MeterReading
 		writer.WriteString("    ('")
 		writer.WriteString(meterReadingsJob[i].Nmi)
 
-		// writer.WriteString("','")
-		// writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
-		// writer.WriteString("',")
-		writer.WriteString("',to_timestamp(")
-		writer.WriteString(strconv.FormatInt(meterReadingsJob[i].Timestamp.Unix(), 10))
-		writer.WriteString("),")
+		writer.WriteString("','")
+		writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
+		writer.WriteString("',")
+		// writer.WriteString("',to_timestamp(")
+		// writer.WriteString(strconv.FormatInt(meterReadingsJob[i].Timestamp.Unix(), 10))
+		// writer.WriteString("),")
 
 		writer.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
 		if i < len(meterReadingsJob)-1 {
