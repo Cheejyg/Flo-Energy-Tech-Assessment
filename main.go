@@ -1,3 +1,5 @@
+// Copyright (c) 2025 Cheejyg. All Rights Reserved.
+
 package main
 
 import (
