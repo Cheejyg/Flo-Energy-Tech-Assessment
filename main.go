@@ -15,6 +15,11 @@ import (
 
 var sep []byte = []byte{','}
 
+type MeterReadingsJob struct {
+	Nmi         string
+	Timestamp   time.Time
+	Consumption float64
+}
 type IntervalDataJob struct {
 	Nmi            string
 	IntervalDate   time.Time
@@ -22,8 +27,12 @@ type IntervalDataJob struct {
 	IntervalValue  []float64
 }
 
+var meterReadingsJobChan chan MeterReadingsJob = make(chan MeterReadingsJob, 2048)
+var meterReadingsJobWaitGroup sync.WaitGroup
+
 var intervalDataJobWorkers int = 8
 var intervalDataJobChan chan IntervalDataJob = make(chan IntervalDataJob, 4096)
+var intervalDataJobWaitGroup sync.WaitGroup
 
 func processLine(line []byte, nmi *string, intervalLength *int) {
 	record := bytes.Split(line, sep)
@@ -74,13 +83,28 @@ func main() {
 	}
 	defer nem12File.Close()
 
-	var intervalDataJobWaitGroup sync.WaitGroup
+	go func() {
+		for meterReadingsJob := range meterReadingsJobChan {
+			fmt.Println(meterReadingsJob)
+			meterReadingsJobWaitGroup.Done()
+		}
+	}()
+
 	intervalDataJobWaitGroup.Add(intervalDataJobWorkers)
 	for range intervalDataJobWorkers {
 		go func() {
 			defer intervalDataJobWaitGroup.Done()
 			for intervalDataJob := range intervalDataJobChan {
-				fmt.Println(intervalDataJob)
+				meterReadingsJobWaitGroup.Add(len(intervalDataJob.IntervalValue))
+				timestamp := intervalDataJob.IntervalDate.Add(intervalDataJob.IntervalLength)
+				for i := range intervalDataJob.IntervalValue {
+					meterReadingsJobChan <- MeterReadingsJob{
+						Nmi:         intervalDataJob.Nmi,
+						Timestamp:   timestamp,
+						Consumption: intervalDataJob.IntervalValue[i],
+					}
+					timestamp = timestamp.Add(intervalDataJob.IntervalLength)
+				}
 			}
 		}()
 	}
@@ -118,4 +142,7 @@ loop:
 
 	close(intervalDataJobChan)
 	intervalDataJobWaitGroup.Wait()
+
+	close(meterReadingsJobChan)
+	meterReadingsJobWaitGroup.Wait()
 }
