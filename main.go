@@ -13,7 +13,7 @@ import (
 
 var sep []byte = []byte{','}
 
-func processLine(line []byte, intervalLength *int) {
+func processLine(line []byte, nmi *string, intervalLength *int) {
 	record := bytes.Split(line, sep)
 	switch {
 	case bytes.Equal(record[0], nem12.RecordIndicatorHeaderBytes):
@@ -28,6 +28,8 @@ func processLine(line []byte, intervalLength *int) {
 		if err != nil {
 			return
 		}
+
+		*nmi = nem12.ParseByteString(nmiDataDetailsRecord.Nmi[:])
 
 		i, err := strconv.Atoi(nem12.ParseByteString(nmiDataDetailsRecord.IntervalLength[:]))
 		if err != nil {
@@ -78,6 +80,7 @@ func main() {
 	bufferedReader := bufio.NewReader(nem12File)
 	var bufferedLine []byte
 
+	var nmi string
 	var intervalLength int
 loop:
 	for {
@@ -87,7 +90,7 @@ loop:
 			if err != nil {
 				if err == io.EOF {
 					if len(bufferedLine) > 0 {
-						processLine(bufferedLine, &intervalLength)
+						processLine(bufferedLine, &nmi, &intervalLength)
 					}
 
 					break loop
@@ -98,7 +101,7 @@ loop:
 			bufferedLine = append(bufferedLine, line...)
 
 			if !isPrefix {
-				processLine(bufferedLine, &intervalLength)
+				processLine(bufferedLine, &nmi, &intervalLength)
 
 				break
 			}
