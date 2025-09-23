@@ -124,9 +124,8 @@ func main() {
 	}
 	defer nem12File.Close()
 
+	sqlInsertBatch := make([]MeterReadingsJob, 0, sqlInsertBatchSize)
 	go func() {
-		sqlInsertBatch := make([]MeterReadingsJob, 0, sqlInsertBatchSize)
-
 		for meterReadingsJob := range meterReadingsJobChan {
 			sqlInsertBatch = append(sqlInsertBatch, meterReadingsJob)
 
@@ -137,9 +136,9 @@ func main() {
 
 			meterReadingsJobWaitGroup.Done()
 		}
-		if len(sqlInsertBatch) > 0 {
-			fmt.Println(generateInsertStatements(sqlInsertBatch))
-		}
+		// if len(sqlInsertBatch) > 0 {
+		// 	fmt.Println(generateInsertStatements(sqlInsertBatch))
+		// }
 	}()
 
 	intervalDataJobWaitGroup.Add(intervalDataJobWorkers)
@@ -197,4 +196,8 @@ loop:
 
 	close(meterReadingsJobChan)
 	meterReadingsJobWaitGroup.Wait()
+
+	if len(sqlInsertBatch) > 0 {
+		fmt.Println(generateInsertStatements(sqlInsertBatch))
+	}
 }
