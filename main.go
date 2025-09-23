@@ -13,6 +13,8 @@ import (
 	"github.com/Cheejyg/Flo-Energy-Tech-Assessment/nem12"
 )
 
+const sqlTimestampLayout string = "2006-01-02 15:04:05" // YYYY-MM-DD HH:MM:SS
+
 var sep []byte = []byte{','}
 
 type MeterReadingsJob struct {
@@ -33,6 +35,10 @@ var meterReadingsJobWaitGroup sync.WaitGroup
 var intervalDataJobWorkers int = 8
 var intervalDataJobChan chan IntervalDataJob = make(chan IntervalDataJob, 4096)
 var intervalDataJobWaitGroup sync.WaitGroup
+
+func generateInsertStatement(meterReadingsJob MeterReadingsJob) string {
+	return fmt.Sprintf("INSERT INTO meter_readings (nmi, timestamp, consumption) VALUES ('%s', '%s', %s);", meterReadingsJob.Nmi, meterReadingsJob.Timestamp.Format(sqlTimestampLayout), strconv.FormatFloat(meterReadingsJob.Consumption, 'f', -1, 64))
+}
 
 func processLine(line []byte, nmi *string, intervalLength *int) {
 	record := bytes.Split(line, sep)
@@ -85,7 +91,8 @@ func main() {
 
 	go func() {
 		for meterReadingsJob := range meterReadingsJobChan {
-			fmt.Println(meterReadingsJob)
+			fmt.Println(generateInsertStatement(meterReadingsJob))
+
 			meterReadingsJobWaitGroup.Done()
 		}
 	}()
