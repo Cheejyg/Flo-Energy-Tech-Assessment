@@ -14,6 +14,7 @@ import (
 	"github.com/Cheejyg/Flo-Energy-Tech-Assessment/nem12"
 )
 
+const sqlInsertBatchSize int = 16_384
 const sqlTimestampLayout string = "2006-01-02 15:04:05" // YYYY-MM-DD HH:MM:SS
 
 var sep []byte = []byte{','}
@@ -47,6 +48,28 @@ func generateInsertStatement(meterReadingsJob MeterReadingsJob) string {
 	stringBuilder.WriteString(meterReadingsJob.Timestamp.Format(sqlTimestampLayout))
 	stringBuilder.WriteString("',")
 	stringBuilder.WriteString(strconv.FormatFloat(meterReadingsJob.Consumption, 'f', -1, 64))
+	stringBuilder.WriteString(");")
+
+	return stringBuilder.String()
+}
+func generateInsertStatements(meterReadingsJob []MeterReadingsJob) string {
+	var stringBuilder strings.Builder
+	stringBuilder.Grow((2 + len(meterReadingsJob)) * 64)
+
+	stringBuilder.WriteString("INSERT INTO meter_readings (nmi, timestamp, consumption)\n  VALUES\n")
+
+	for i := range meterReadingsJob {
+		stringBuilder.WriteString("    ('")
+		stringBuilder.WriteString(meterReadingsJob[i].Nmi)
+		stringBuilder.WriteString("','")
+		stringBuilder.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
+		stringBuilder.WriteString("',")
+		stringBuilder.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
+		if i < len(meterReadingsJob)-1 {
+			stringBuilder.WriteString("),\n")
+		}
+	}
+
 	stringBuilder.WriteString(");")
 
 	return stringBuilder.String()
@@ -102,10 +125,20 @@ func main() {
 	defer nem12File.Close()
 
 	go func() {
+		sqlInsertBatch := make([]MeterReadingsJob, 0, sqlInsertBatchSize)
+
 		for meterReadingsJob := range meterReadingsJobChan {
-			fmt.Println(generateInsertStatement(meterReadingsJob))
+			sqlInsertBatch = append(sqlInsertBatch, meterReadingsJob)
+
+			if len(sqlInsertBatch) >= sqlInsertBatchSize {
+				fmt.Println(generateInsertStatements(sqlInsertBatch))
+				sqlInsertBatch = sqlInsertBatch[:0]
+			}
 
 			meterReadingsJobWaitGroup.Done()
+		}
+		if len(sqlInsertBatch) > 0 {
+			fmt.Println(generateInsertStatements(sqlInsertBatch))
 		}
 	}()
 
