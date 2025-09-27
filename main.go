@@ -16,11 +16,12 @@ import (
 	"github.com/Cheejyg/Flo-Energy-Tech-Assessment/nem12"
 )
 
+const COMMA = ','
 const sqlInsertBatchSize int = 16_384
 const sqlTimestampLayout string = "2006-01-02 15:04:05" // YYYY-MM-DD HH:MM:SS
 const intervalDataJobWorkers int = 8
 
-var sep []byte = []byte{','}
+var sep []byte = []byte{COMMA}
 
 type MeterReadingsJob struct {
 	Nmi         string
@@ -117,8 +118,40 @@ func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJ
 	writer.WriteString("\n")
 }
 
-func processLine(line []byte, nmi *string, intervalLength *int) {
-	record := bytes.Split(line, sep)
+func lineSplit(line *[]byte, sep byte, intervalLength *int) (record [][]byte) {
+	switch {
+	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorHeaderBytes):
+		record = make([][]byte, 1, 5)
+	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorNmiDataDetailsBytes):
+		record = make([][]byte, 1, 3)
+	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorIntervalDataBytes):
+		record = make([][]byte, 1, 7 + 1440 / *intervalLength)
+	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorIntervalEventBytes):
+		record = make([][]byte, 1, 4)
+	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorB2bDetailsBytes):
+		record = make([][]byte, 1, 2)
+	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorEndOfDataBytes):
+		record = make([][]byte, 1)
+	default:
+		record = make([][]byte, 1, 10)
+	}
+
+	record[0] = (*line)[0:3]
+
+	var left, right int
+	for left, right = 4, 4; right < len(*line); right++ {
+		if (*line)[right] == sep {
+			record = append(record, (*line)[left:right])
+			left = right + 1
+		}
+	}
+
+	record = append(record, bytes.TrimRight((*line)[left:], "\r\n"))
+
+	return
+}
+func processLine(line *[]byte, nmi *string, intervalLength *int) {
+	record := lineSplit(line, COMMA, intervalLength)
 	switch {
 	case bytes.Equal(record[0], nem12.RecordIndicatorHeaderBytes):
 		break
@@ -230,36 +263,27 @@ func main() {
 		}()
 	}
 
-	bufferedReader := bufio.NewReader(nem12File)
+	bufferedReader := bufio.NewReaderSize(nem12File, 1<<20)
 	var bufferedLine []byte
 
 	var nmi string
 	var intervalLength int
-loop:
 	for {
-		bufferedLine = bufferedLine[:0]
-		for {
-			line, isPrefix, err := bufferedReader.ReadLine()
-			if err != nil {
-				if err == io.EOF {
-					if len(bufferedLine) > 0 {
-						processLine(bufferedLine, &nmi, &intervalLength)
-					}
-
-					break loop
-				} else {
-					log.Fatalln(err)
-					return
+		bufferedLine, err = bufferedReader.ReadSlice('\n')
+		if err != nil {
+			if err == io.EOF {
+				if len(bufferedLine) > 0 {
+					processLine(&bufferedLine, &nmi, &intervalLength)
 				}
-			}
-			bufferedLine = append(bufferedLine, line...)
-
-			if !isPrefix {
-				processLine(bufferedLine, &nmi, &intervalLength)
 
 				break
+			} else {
+				log.Fatalln(err)
+				return
 			}
 		}
+
+		processLine(&bufferedLine, &nmi, &intervalLength)
 	}
 
 	close(intervalDataJobChan)
