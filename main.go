@@ -26,13 +26,13 @@ var sep []byte = []byte{COMMA}
 type MeterReadingsJob struct {
 	Nmi         string
 	Timestamp   time.Time
-	Consumption float64
+	Consumption []byte
 }
 type IntervalDataJob struct {
 	Nmi            string
 	IntervalDate   time.Time
 	IntervalLength time.Duration
-	IntervalValue  []float64
+	IntervalValue  [][]byte
 }
 
 var meterReadingsJobChan chan MeterReadingsJob = make(chan MeterReadingsJob, 2048)
@@ -50,7 +50,7 @@ func generateInsertStatement(meterReadingsJob MeterReadingsJob) string {
 	stringBuilder.WriteString("','")
 	stringBuilder.WriteString(meterReadingsJob.Timestamp.Format(sqlTimestampLayout))
 	stringBuilder.WriteString("',")
-	stringBuilder.WriteString(strconv.FormatFloat(meterReadingsJob.Consumption, 'f', -1, 64))
+	stringBuilder.Write(meterReadingsJob.Consumption)
 	stringBuilder.WriteString(");")
 
 	return stringBuilder.String()
@@ -67,7 +67,7 @@ func generateInsertStatements(meterReadingsJob []MeterReadingsJob) string {
 		stringBuilder.WriteString("','")
 		stringBuilder.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
 		stringBuilder.WriteString("',")
-		stringBuilder.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
+		stringBuilder.Write(meterReadingsJob[i].Consumption)
 		if i < len(meterReadingsJob)-1 {
 			stringBuilder.WriteString("),\n")
 		}
@@ -93,7 +93,7 @@ func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []MeterReading
 		// writer.WriteString(strconv.FormatInt(meterReadingsJob[i].Timestamp.Unix(), 10))
 		// writer.WriteString("),")
 
-		writer.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
+		writer.Write(meterReadingsJob[i].Consumption)
 		if i < len(meterReadingsJob)-1 {
 			writer.WriteString("),\n")
 		}
@@ -109,7 +109,7 @@ func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJ
 		writer.WriteByte(',')
 		writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
 		writer.WriteByte(',')
-		writer.WriteString(strconv.FormatFloat(meterReadingsJob[i].Consumption, 'f', -1, 64))
+		writer.Write(meterReadingsJob[i].Consumption)
 		if i < len(meterReadingsJob)-1 {
 			writer.WriteByte('\n')
 		}

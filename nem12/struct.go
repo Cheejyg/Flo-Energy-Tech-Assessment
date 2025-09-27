@@ -3,7 +3,6 @@
 package nem12
 
 import (
-	"strconv"
 	"strings"
 	"time"
 )
@@ -202,7 +201,7 @@ type IntervalDataRecord struct {
 	// The value may contain decimal places.
 	//
 	// Exponential values are not allowed.
-	IntervalValue []float64
+	IntervalValue [][]byte
 
 	// Summary of the data quality and Substitution/Estimation flags for all IntervalValues contained in this record.
 	//
@@ -251,7 +250,7 @@ func (intervalDataRecord *IntervalDataRecord) String() string {
 		if i > 0 {
 			stringBuilder.WriteString(", ")
 		}
-		stringBuilder.WriteString(strconv.FormatFloat(intervalDataRecord.IntervalValue[i], 'f', -1, 64))
+		stringBuilder.Write(intervalDataRecord.IntervalValue[i])
 	}
 	stringBuilder.WriteString("]")
 	stringBuilder.WriteString(", QualityMethod:")

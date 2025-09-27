@@ -10,6 +10,7 @@ const (
 	RecordIndicatorB2bDetailsString     = "500"
 	RecordIndicatorEndOfDataString      = "900"
 )
+const COMMA = ','
 
 var (
 	RecordIndicatorHeaderBytes         = []byte(RecordIndicatorHeaderString)
@@ -19,3 +20,4 @@ var (
 	RecordIndicatorB2bDetailsBytes     = []byte(RecordIndicatorB2bDetailsString)
 	RecordIndicatorEndOfDataBytes      = []byte(RecordIndicatorEndOfDataString)
 )
+var sep []byte = []byte{COMMA}

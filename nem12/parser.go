@@ -195,6 +195,8 @@ func ParseNmiDataDetailsRecord(record [][]byte) (nmiDataDetailsRecord *NmiDataDe
 	return
 }
 func ParseIntervalDataRecord(record [][]byte, intervalLength int) (intervalDataRecord *IntervalDataRecord, err error) {
+	n := 1440 / intervalLength
+
 	intervalDataRecord = &IntervalDataRecord{}
 
 	copy(intervalDataRecord.RecordIndicator[:], record[0])
@@ -204,14 +206,9 @@ func ParseIntervalDataRecord(record [][]byte, intervalLength int) (intervalDataR
 	}
 	intervalDataRecord.IntervalDate = date
 
-	n := 1440 / intervalLength
-	intervalDataRecord.IntervalValue = make([]float64, n)
+	intervalDataRecord.IntervalValue = make([][]byte, n)
 	for i := range n {
-		intervalValue, err := ParseIntervalValue(record[2+i])
-		if err != nil {
-			return nil, err
-		}
-		intervalDataRecord.IntervalValue[i] = intervalValue
+		intervalDataRecord.IntervalValue[i] = record[2+i]
 	}
 
 	copy(intervalDataRecord.QualityMethod[:], record[n+2])
