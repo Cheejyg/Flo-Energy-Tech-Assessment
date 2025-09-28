@@ -35,13 +35,13 @@ type IntervalDataJob struct {
 	IntervalValue  [][]byte
 }
 
-var meterReadingsJobChan chan MeterReadingsJob = make(chan MeterReadingsJob, 2048)
+var meterReadingsJobChan chan *MeterReadingsJob = make(chan *MeterReadingsJob, 2048)
 var meterReadingsJobWaitGroup sync.WaitGroup
 
 var intervalDataJobChan chan IntervalDataJob = make(chan IntervalDataJob, 4096)
 var intervalDataJobWaitGroup sync.WaitGroup
 
-func generateInsertStatement(meterReadingsJob MeterReadingsJob) string {
+func generateInsertStatement(meterReadingsJob *MeterReadingsJob) string {
 	var stringBuilder strings.Builder
 	stringBuilder.Grow(128)
 
@@ -55,7 +55,7 @@ func generateInsertStatement(meterReadingsJob MeterReadingsJob) string {
 
 	return stringBuilder.String()
 }
-func generateInsertStatements(meterReadingsJob []MeterReadingsJob) string {
+func generateInsertStatements(meterReadingsJob []*MeterReadingsJob) string {
 	var stringBuilder strings.Builder
 	stringBuilder.Grow((2 + len(meterReadingsJob)) * 64)
 
@@ -77,7 +77,7 @@ func generateInsertStatements(meterReadingsJob []MeterReadingsJob) string {
 
 	return stringBuilder.String()
 }
-func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJob) {
+func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []*MeterReadingsJob) {
 	defer writer.Flush()
 
 	writer.WriteString("INSERT INTO meter_readings (nmi, timestamp, consumption)\n  VALUES\n")
@@ -101,7 +101,7 @@ func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []MeterReading
 
 	writer.WriteString(");\n")
 }
-func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []MeterReadingsJob) {
+func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []*MeterReadingsJob) {
 	defer writer.Flush()
 
 	for i := range meterReadingsJob {
@@ -226,7 +226,13 @@ func main() {
 	sqlCopyBufferedWriter := bufio.NewWriterSize(sqlCopyFile, 1<<20)
 	defer sqlCopyBufferedWriter.Flush()
 
-	sqlInsertBatch := make([]MeterReadingsJob, 0, sqlInsertBatchSize)
+	sqlInsertBatch := make([]*MeterReadingsJob, 0, sqlInsertBatchSize)
+	defer func() {
+		if len(sqlInsertBatch) > 0 {
+			writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
+			writeCopyStatements(sqlCopyBufferedWriter, sqlInsertBatch)
+		}
+	}()
 	go func() {
 		for meterReadingsJob := range meterReadingsJobChan {
 			sqlInsertBatch = append(sqlInsertBatch, meterReadingsJob)
@@ -252,7 +258,7 @@ func main() {
 				meterReadingsJobWaitGroup.Add(len(intervalDataJob.IntervalValue))
 				timestamp := intervalDataJob.IntervalDate.Add(intervalDataJob.IntervalLength)
 				for i := range intervalDataJob.IntervalValue {
-					meterReadingsJobChan <- MeterReadingsJob{
+					meterReadingsJobChan <- &MeterReadingsJob{
 						Nmi:         intervalDataJob.Nmi,
 						Timestamp:   timestamp,
 						Consumption: intervalDataJob.IntervalValue[i],
@@ -291,9 +297,4 @@ func main() {
 
 	close(meterReadingsJobChan)
 	meterReadingsJobWaitGroup.Wait()
-
-	if len(sqlInsertBatch) > 0 {
-		writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
-		writeCopyStatements(sqlCopyBufferedWriter, sqlInsertBatch)
-	}
 }
