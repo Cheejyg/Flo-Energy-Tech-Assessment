@@ -118,6 +118,9 @@ func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []*MeterReadings
 	writer.WriteString("\n")
 }
 
+var sqlInsertBufferedWriter *bufio.Writer
+var sqlCopyBufferedWriter *bufio.Writer
+var sqlInsertBatch []*MeterReadingsJob = make([]*MeterReadingsJob, 0, sqlInsertBatchSize)
 func lineSplit(line *[]byte, sep byte, intervalLength *int) (record [][]byte) {
 	switch {
 	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorHeaderBytes):
@@ -220,13 +223,13 @@ func main() {
 	}
 	defer sqlCopyFile.Close()
 
-	sqlInsertBufferedWriter := bufio.NewWriterSize(sqlInsertFile, 1<<20)
+	sqlInsertBufferedWriter = bufio.NewWriterSize(sqlInsertFile, 1<<27)
 	defer sqlInsertBufferedWriter.Flush()
 
-	sqlCopyBufferedWriter := bufio.NewWriterSize(sqlCopyFile, 1<<20)
+	sqlCopyBufferedWriter = bufio.NewWriterSize(sqlCopyFile, 1<<27)
 	defer sqlCopyBufferedWriter.Flush()
 
-	sqlInsertBatch := make([]*MeterReadingsJob, 0, sqlInsertBatchSize)
+	sqlInsertBatch = make([]*MeterReadingsJob, 0, sqlInsertBatchSize)
 	defer func() {
 		if len(sqlInsertBatch) > 0 {
 			writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
