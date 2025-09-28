@@ -10,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Cheejyg/Flo-Energy-Tech-Assessment/nem12"
@@ -19,7 +18,6 @@ import (
 const COMMA = ','
 const sqlInsertBatchSize int = 16_384
 const sqlTimestampLayout string = "2006-01-02 15:04:05" // YYYY-MM-DD HH:MM:SS
-const intervalDataJobWorkers int = 8
 
 var sep []byte = []byte{COMMA}
 
@@ -34,12 +32,6 @@ type IntervalDataJob struct {
 	IntervalLength time.Duration
 	IntervalValue  [][]byte
 }
-
-var meterReadingsJobChan chan *MeterReadingsJob = make(chan *MeterReadingsJob, 2048)
-var meterReadingsJobWaitGroup sync.WaitGroup
-
-var intervalDataJobChan chan IntervalDataJob = make(chan IntervalDataJob, 4096)
-var intervalDataJobWaitGroup sync.WaitGroup
 
 func generateInsertStatement(meterReadingsJob *MeterReadingsJob) string {
 	var stringBuilder strings.Builder
@@ -86,12 +78,12 @@ func writeInsertStatements(writer *bufio.Writer, meterReadingsJob []*MeterReadin
 		writer.WriteString("    ('")
 		writer.WriteString(meterReadingsJob[i].Nmi)
 
-		writer.WriteString("','")
-		writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
-		writer.WriteString("',")
-		// writer.WriteString("',to_timestamp(")
-		// writer.WriteString(strconv.FormatInt(meterReadingsJob[i].Timestamp.Unix(), 10))
-		// writer.WriteString("),")
+		// writer.WriteString("','")
+		// writer.WriteString(meterReadingsJob[i].Timestamp.Format(sqlTimestampLayout))
+		// writer.WriteString("',")
+		writer.WriteString("',to_timestamp(")
+		writer.WriteString(strconv.FormatInt(meterReadingsJob[i].Timestamp.Unix(), 10))
+		writer.WriteString("),")
 
 		writer.Write(meterReadingsJob[i].Consumption)
 		if i < len(meterReadingsJob)-1 {
@@ -121,6 +113,27 @@ func writeCopyStatements(writer *bufio.Writer, meterReadingsJob []*MeterReadings
 var sqlInsertBufferedWriter *bufio.Writer
 var sqlCopyBufferedWriter *bufio.Writer
 var sqlInsertBatch []*MeterReadingsJob = make([]*MeterReadingsJob, 0, sqlInsertBatchSize)
+
+func processMeterReadings(nmi *string, timestamp *time.Time, consumption []byte) {
+	sqlInsertBatch = append(sqlInsertBatch, &MeterReadingsJob{
+		Nmi:         *nmi,
+		Timestamp:   *timestamp,
+		Consumption: consumption,
+	})
+
+	if len(sqlInsertBatch) >= sqlInsertBatchSize {
+		writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
+		writeCopyStatements(sqlCopyBufferedWriter, sqlInsertBatch)
+		sqlInsertBatch = sqlInsertBatch[:0]
+	}
+}
+func processIntervalData(nmi *string, intervalDate *time.Time, intervalLength time.Duration, intervalValue *[][]byte) {
+	timestamp := intervalDate.Add(intervalLength)
+	for i := range *intervalValue {
+		processMeterReadings(nmi, &timestamp, (*intervalValue)[i])
+		timestamp = timestamp.Add(intervalLength)
+	}
+}
 func lineSplit(line *[]byte, sep byte, intervalLength *int) (record [][]byte) {
 	switch {
 	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorHeaderBytes):
@@ -180,12 +193,7 @@ func processLine(line *[]byte, nmi *string, intervalLength *int) {
 			return
 		}
 
-		intervalDataJobChan <- IntervalDataJob{
-			Nmi:            *nmi,
-			IntervalDate:   intervalDataRecord.IntervalDate,
-			IntervalLength: time.Duration(*intervalLength) * time.Minute,
-			IntervalValue:  intervalDataRecord.IntervalValue,
-		}
+		processIntervalData(nmi, &intervalDataRecord.IntervalDate, time.Duration(*intervalLength)*time.Minute, &intervalDataRecord.IntervalValue)
 	case bytes.Equal(record[0], nem12.RecordIndicatorIntervalEventBytes):
 		break
 	case bytes.Equal(record[0], nem12.RecordIndicatorB2bDetailsBytes):
@@ -236,41 +244,6 @@ func main() {
 			writeCopyStatements(sqlCopyBufferedWriter, sqlInsertBatch)
 		}
 	}()
-	go func() {
-		for meterReadingsJob := range meterReadingsJobChan {
-			sqlInsertBatch = append(sqlInsertBatch, meterReadingsJob)
-
-			if len(sqlInsertBatch) >= sqlInsertBatchSize {
-				writeInsertStatements(sqlInsertBufferedWriter, sqlInsertBatch)
-				writeCopyStatements(sqlCopyBufferedWriter, sqlInsertBatch)
-				sqlInsertBatch = sqlInsertBatch[:0]
-			}
-
-			meterReadingsJobWaitGroup.Done()
-		}
-		// if len(sqlInsertBatch) > 0 {
-		// 	fmt.Println(generateInsertStatements(sqlInsertBatch))
-		// }
-	}()
-
-	intervalDataJobWaitGroup.Add(intervalDataJobWorkers)
-	for range intervalDataJobWorkers {
-		go func() {
-			defer intervalDataJobWaitGroup.Done()
-			for intervalDataJob := range intervalDataJobChan {
-				meterReadingsJobWaitGroup.Add(len(intervalDataJob.IntervalValue))
-				timestamp := intervalDataJob.IntervalDate.Add(intervalDataJob.IntervalLength)
-				for i := range intervalDataJob.IntervalValue {
-					meterReadingsJobChan <- &MeterReadingsJob{
-						Nmi:         intervalDataJob.Nmi,
-						Timestamp:   timestamp,
-						Consumption: intervalDataJob.IntervalValue[i],
-					}
-					timestamp = timestamp.Add(intervalDataJob.IntervalLength)
-				}
-			}
-		}()
-	}
 
 	bufferedReader := bufio.NewReaderSize(nem12File, 1<<20)
 	var bufferedLine []byte
@@ -294,10 +267,4 @@ func main() {
 
 		processLine(&bufferedLine, &nmi, &intervalLength)
 	}
-
-	close(intervalDataJobChan)
-	intervalDataJobWaitGroup.Wait()
-
-	close(meterReadingsJobChan)
-	meterReadingsJobWaitGroup.Wait()
 }
