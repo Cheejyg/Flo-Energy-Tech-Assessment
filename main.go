@@ -135,6 +135,10 @@ func processIntervalData(nmi *string, intervalDate *time.Time, intervalLength ti
 	}
 }
 func lineSplit(line *[]byte, sep byte, intervalLength *int) (record [][]byte) {
+	if len(*line) < 3 {
+		return nil
+	}
+
 	switch {
 	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorHeaderBytes):
 		record = make([][]byte, 1, 5)
@@ -147,7 +151,8 @@ func lineSplit(line *[]byte, sep byte, intervalLength *int) (record [][]byte) {
 	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorB2bDetailsBytes):
 		record = make([][]byte, 1, 2)
 	case bytes.Equal((*line)[0:3], nem12.RecordIndicatorEndOfDataBytes):
-		record = make([][]byte, 1)
+		record = [][]byte{(*line)[0:3]}
+		return
 	default:
 		record = make([][]byte, 1, 10)
 	}
@@ -166,8 +171,12 @@ func lineSplit(line *[]byte, sep byte, intervalLength *int) (record [][]byte) {
 
 	return
 }
-func processLine(line *[]byte, nmi *string, intervalLength *int) {
-	record := lineSplit(line, COMMA, intervalLength)
+func processLine(line []byte, nmi *string, intervalLength *int) {
+	if len(line) < 1 {
+		return
+	}
+
+	record := lineSplit(&line, COMMA, intervalLength)
 	switch {
 	case bytes.Equal(record[0], nem12.RecordIndicatorHeaderBytes):
 		break
@@ -246,25 +255,38 @@ func main() {
 	}()
 
 	bufferedReader := bufio.NewReaderSize(nem12File, 1<<20)
-	var bufferedLine []byte
+	var bufferedLine bytes.Buffer
+	bufferedLine.Grow(1 << 21)
 
 	var nmi string
 	var intervalLength int
 	for {
-		bufferedLine, err = bufferedReader.ReadSlice('\n')
+		line, err := bufferedReader.ReadSlice('\n')
 		if err != nil {
-			if err == io.EOF {
-				if len(bufferedLine) > 0 {
-					processLine(&bufferedLine, &nmi, &intervalLength)
+			if err == bufio.ErrBufferFull {
+				bufferedLine.Write(line)
+				continue
+			} else if err == io.EOF {
+				if bufferedLine.Len() > 0 {
+					bufferedLine.Write(line)
+					processLine(bufferedLine.Bytes(), &nmi, &intervalLength)
+					// bufferedLine.Reset()
+				} else {
+					processLine(line, &nmi, &intervalLength)
 				}
-
-				break
 			} else {
 				log.Fatalln(err)
-				return
 			}
+
+			break
 		}
 
-		processLine(&bufferedLine, &nmi, &intervalLength)
+		if bufferedLine.Len() > 0 {
+			bufferedLine.Write(line)
+			processLine(bufferedLine.Bytes(), &nmi, &intervalLength)
+			bufferedLine.Reset()
+		} else {
+			processLine(line, &nmi, &intervalLength)
+		}
 	}
 }
